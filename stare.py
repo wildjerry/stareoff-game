@@ -16,9 +16,9 @@ def show_frame_matplotlib(frame):
     plt.pause(0.001)  # Short pause to allow the figure to refresh
 
 # Define constants for blink detection parameters
-EYE_AR_THRESH = 0.15  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
+EYE_AR_THRESH = 0.2  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
 EYE_AR_CONSEC_FRAMES = 0.75  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
-frame_rate = 0.75  # Assumed frame rate of 30 frames per second, used to calculate blink duration threshold
+#frame_rate = 30  # Assumed frame rate of 30 frames per second, used to calculate blink duration threshold
 
 # Initialize dlib's face detector and facial landmark predictor model
 print("[INFO] Loading facial landmark predictor...")
@@ -45,10 +45,21 @@ consec_frame_count = 0  # Counter for consecutive frames where EAR is below thre
 vs = cv2.VideoCapture(0)
 time.sleep(2.0)
 
+frame_time_running_average = 1/25
+
+last_time=time.time()
+
 # Main loop to process video frames
 start_time = time.time()
 while True:
     ret, frame = vs.read()  # Capture a frame
+    cur_time = time.time()
+    frame_time = cur_time - last_time
+    last_time = cur_time
+
+    frame_time_running_average = 0.9*frame_time_running_average + 0.1*frame_time
+    frame_rate = 1/frame_time_running_average
+
     if not ret:
         break  # Exit if the frame could not be captured
 
@@ -89,7 +100,7 @@ while True:
             blink_detected = True
 
         # Display EAR value on the frame for reference
-        cv2.putText(frame, f"EAR: {ear:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame, f"EAR: {ear:.2f} frame_rate: {frame_rate:.2f} consec_frame_count: {consec_frame_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     # Display the frame using matplotlib
     show_frame_matplotlib(frame)
