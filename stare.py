@@ -5,6 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from imutils import face_utils
 import time
+import sqlite3
+from uuid import uuid4
+
 
 # Function to display the image using matplotlib
 def show_frame_matplotlib(frame):
@@ -18,7 +21,6 @@ def show_frame_matplotlib(frame):
 # Define constants for blink detection parameters
 EYE_AR_THRESH = 0.2  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
 EYE_AR_CONSEC_FRAMES = 0.75  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
-#frame_rate = 30  # Assumed frame rate of 30 frames per second, used to calculate blink duration threshold
 
 # Initialize dlib's face detector and facial landmark predictor model
 print("[INFO] Loading facial landmark predictor...")
@@ -41,13 +43,70 @@ frame_count = 0  # Total frames processed
 blink_detected = False  # Flag to indicate if a blink has been detected
 consec_frame_count = 0  # Counter for consecutive frames where EAR is below threshold
 
+db_connection = sqlite3.connect('stare.db')
+db_cursor = db_connection.cursor()
+
+player_uuid = str(uuid4())
+
+def add_to_db(score, face):
+    #based on https://www.geeksforgeeks.org/how-to-insert-image-in-sqlite-using-python/
+    sqlite_insert_blob_query = """ INSERT INTO Leaderboard
+                                 (image, score, uuid) VALUES (?, ?, ?)"""
+    data_tuple = (face, score, player_uuid)
+    db_cursor.execute(sqlite_insert_blob_query, data_tuple)
+    db_connection.commit()
+
+def display_leaderboard():
+    sqlite_query = '''
+        WITH RankedLeaderboard AS (
+            SELECT *, RANK() OVER (ORDER BY score DESC) AS rank
+            FROM Leaderboard
+        ),
+        Top5 AS (
+            SELECT * FROM RankedLeaderboard
+            WHERE rank <= 5
+        )
+        SELECT * FROM Top5
+        UNION ALL
+        SELECT * FROM RankedLeaderboard
+        WHERE uuid = ? AND uuid NOT IN (SELECT uuid FROM Top5);
+
+    '''
+    db_cursor.execute(sqlite_query, [player_uuid])
+    leaderboard = db_cursor.fetchall()
+
+    fig, ax = plt.subplots(3,2)
+
+    for a in ax.flat:
+        a.axis("off")
+
+    for i, row in enumerate(leaderboard):
+        lb_img = cv2.imdecode( np.frombuffer(row[0], dtype=np.uint8 ), cv2.IMREAD_COLOR)
+        lb_img = cv2.cvtColor(lb_img, cv2.COLOR_BGR2RGB)
+        lb_score = row[1]
+        lb_uuid = row[2]
+        lb_rank = row[3]
+
+        r, c = divmod(i, 2)
+        ax[r,c].imshow(lb_img)
+        ax[r, c].set_title(f"#{lb_rank}: {lb_score:.2f}", fontsize=10)
+    plt.show()
+
+
+
+
 # Start the video stream and allow the camera to warm up
 vs = cv2.VideoCapture(0)
 time.sleep(2.0)
 
-frame_time_running_average = 1/25
+frame_time_running_average = 1 #starting point for average-a really high default works well because it stablizes in around 10-15 frames no matter what, but those 10-15 frames are a lot quicker at high FPS.
+
 
 last_time=time.time()
+
+leaderboard_image = None
+
+rects = None #a rectangle for each face, from the detector
 
 # Main loop to process video frames
 start_time = time.time()
@@ -57,7 +116,9 @@ while True:
     frame_time = cur_time - last_time
     last_time = cur_time
 
-    frame_time_running_average = 0.9*frame_time_running_average + 0.1*frame_time
+
+    if rects: #don't count frames when no face is detected, because they're a lot faster
+        frame_time_running_average = 0.7*frame_time_running_average + 0.3*frame_time
     frame_rate = 1/frame_time_running_average
 
     if not ret:
@@ -68,6 +129,9 @@ while True:
 
     # Detect faces in the grayscale frame
     rects = detector(gray, 0)
+
+    if leaderboard_image is None and len(rects)!=0:
+        leaderboard_image = cv2.imencode('.jpg', frame)[1].tobytes()
 
     # Loop over each detected face
     for rect in rects:
@@ -100,22 +164,18 @@ while True:
             blink_detected = True
 
         # Display EAR value on the frame for reference
-        cv2.putText(frame, f"EAR: {ear:.2f} frame_rate: {frame_rate:.2f} consec_frame_count: {consec_frame_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(frame, f"EAR: {ear:.2f} frame_rate: {frame_rate:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
     # Display the frame using matplotlib
     show_frame_matplotlib(frame)
 
-    # If blink detected, exit loop and close video
     if blink_detected:
-        print("Blink detected, exiting game...")
-        plt.close('all')  # Close all matplotlib windows
-        break
-
-    # Optional: Allow manual exit if 'q' is pressed
-    if plt.waitforbuttonpress(timeout=0.01):
-        plt.close('all')
-        print("User exited with key press.")
-        break
+        add_to_db(time.time()-start_time, leaderboard_image)
+    
+    if blink_detected or plt.waitforbuttonpress(timeout=0.01):
+        display_leaderboard()
+        break;
+        
 
 # Release resources
 vs.release()
