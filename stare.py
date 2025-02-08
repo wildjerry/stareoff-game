@@ -39,7 +39,6 @@ def eye_aspect_ratio(eye):
     return ear
 
 # Initialize variables for tracking blinks
-frame_count = 0  # Total frames processed
 blink_detected = False  # Flag to indicate if a blink has been detected
 consec_frame_count = 0  # Counter for consecutive frames where EAR is below threshold
 
@@ -89,7 +88,7 @@ def display_leaderboard():
 
         r, c = divmod(i, 2)
         ax[r,c].imshow(lb_img)
-        ax[r, c].set_title(f"#{lb_rank}: {lb_score:.2f}", fontsize=10)
+        ax[r, c].set_title(f"#{lb_rank}: {lb_score:.2f} seconds", fontsize=10)
     plt.show()
 
 
@@ -110,28 +109,26 @@ rects = None #a rectangle for each face, from the detector
 
 # Main loop to process video frames
 start_time = time.time()
+
 while True:
-    ret, frame = vs.read()  # Capture a frame
-    cur_time = time.time()
-    frame_time = cur_time - last_time
-    last_time = cur_time
-
-
-    if rects: #don't count frames when no face is detected, because they're a lot faster
-        frame_time_running_average = 0.7*frame_time_running_average + 0.3*frame_time
     frame_rate = 1/frame_time_running_average
+
+    frame_begin = time.time()
+
+    ret, full_frame = vs.read()  # Capture a frame
 
     if not ret:
         break  # Exit if the frame could not be captured
 
-    frame = imutils.resize(frame, width=600)  # Resize frame for faster processing
+    frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
+    gray = cv2.equalizeHist(gray)
 
     # Detect faces in the grayscale frame
     rects = detector(gray, 0)
 
     if leaderboard_image is None and len(rects)!=0:
-        leaderboard_image = cv2.imencode('.jpg', frame)[1].tobytes()
+        leaderboard_image = cv2.imencode('.jpg', full_frame)[1].tobytes()
 
     # Loop over each detected face
     for rect in rects:
@@ -173,8 +170,13 @@ while True:
         add_to_db(time.time()-start_time, leaderboard_image)
     
     if blink_detected or plt.waitforbuttonpress(timeout=0.01):
+        plt.close()
         display_leaderboard()
         break;
+
+    if rects: #don't count frames when no face is detected, because they're a lot faster and will shift the timing
+        frame_time = time.time() - frame_begin
+        frame_time_running_average = 0.7*frame_time_running_average + 0.3*frame_time
         
 
 # Release resources
