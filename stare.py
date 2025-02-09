@@ -3,11 +3,14 @@ import dlib
 import imutils
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 from imutils import face_utils
 import time
 import sqlite3
 from uuid import uuid4
 
+
+#frame_artist = None #https://stackoverflow.com/questions/28692246/matplotlib-draw-is-slow-in-loop-when-it-showing-an-image
 
 # Function to display the image using matplotlib
 def show_frame_matplotlib(frame):
@@ -111,6 +114,9 @@ rects = None #a rectangle for each face, from the detector
 start_time = time.time()
 
 while True:
+    plt.clf()
+    plt.cla()
+
     frame_rate = 1/frame_time_running_average
 
     frame_begin = time.time()
@@ -121,6 +127,7 @@ while True:
         break  # Exit if the frame could not be captured
 
     frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
+
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
     gray = cv2.equalizeHist(gray)
 
