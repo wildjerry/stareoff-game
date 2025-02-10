@@ -19,7 +19,7 @@ def show_frame_matplotlib(frame):
 
 # Define constants for blink detection parameters
 EYE_AR_THRESH = 0.2  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
-EYE_AR_CONSEC_FRAMES = 0.75  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
+EYE_AR_CONSEC_FRAMES = 0.3  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
 
 # Initialize dlib's face detector and facial landmark predictor model
 print("[INFO] Loading facial landmark predictor...")
@@ -114,7 +114,6 @@ exit_key_pressed = False
 
 def handle_keypress(event):
     global exit_key_pressed
-    print('keypress detected')
     if event.key in ('q', 'Q'):
         print('keypress was q or Q')
         exit_key_pressed = True
@@ -137,7 +136,6 @@ while True:
     frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
-    gray = cv2.equalizeHist(gray)
 
     # Detect faces in the grayscale frame
     rects = detector(gray, 0)
