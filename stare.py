@@ -1,13 +1,12 @@
 import cv2
-import dlib
-import imutils
+import mediapipe as mp
+from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates as denormalize_coordinates
 import numpy as np
 import matplotlib.pyplot as plt
-from imutils import face_utils
+from imutils import resize
 import time
 import sqlite3
 from uuid import uuid4
-
 
 # Function to display the image using matplotlib
 def show_frame_matplotlib(frame):
@@ -18,22 +17,33 @@ def show_frame_matplotlib(frame):
     plt.show(block=False)  # Show the frame without blocking the main program
     plt.pause(0.001)  # Short pause to allow the figure to refresh
 
+# Store the landmark indices for specific facial features
+# These are predefined Mediapipe indices for left and right eyes, iris, nose, and mouth
+
+LEFT_EYE_LANDMARKS = [362, 385, 387, 263, 373, 380]  # Left eye landmarks
+
+RIGHT_EYE_LANDMARKS = [33,  160, 158, 133, 153, 144]  # Right eye landmarks
+
 # Define constants for blink detection parameters
-EYE_AR_THRESH = 0.2  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
-EYE_AR_CONSEC_FRAMES = 0.75  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
+EYE_AR_THRESH = 0.18  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
+EYE_AR_CONSEC_FRAMES = 0.1  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
 
 # Initialize dlib's face detector and facial landmark predictor model
-print("[INFO] Loading facial landmark predictor...")
-detector = dlib.get_frontal_face_detector()  # Face detection model
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")  # 68-point facial landmarks model
+print("[INFO] Loading mediaPipe faceMesh predictor...")
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
+
+
+def distance(c1, c2):
+    return ( np.linalg.norm( (c1[0]-c2[0], c1[1]-c2[1]) ) )
 
 # Function to calculate Eye Aspect Ratio (EAR) for blink detection
 def eye_aspect_ratio(eye):
     # Compute the distances between the vertical eye landmarks
-    A = np.linalg.norm(eye[1] - eye[5])
-    B = np.linalg.norm(eye[2] - eye[4])
+    A = distance(eye[1], eye[5])
+    B = distance(eye[2], eye[4])
     # Compute the distance between the horizontal eye landmarks
-    C = np.linalg.norm(eye[0] - eye[3])
+    C = distance(eye[0], eye[3])
     # Calculate the EAR, a measure of openness of the eye
     ear = (A + B) / (2.0 * C)
     return ear
@@ -89,6 +99,7 @@ def display_leaderboard():
         r, c = divmod(i, 2)
         ax[r,c].imshow(lb_img)
         ax[r, c].set_title(f"#{lb_rank}: {lb_score:.2f} seconds", fontsize=10)
+        
     plt.show()
 
 
@@ -105,46 +116,59 @@ last_time=time.time()
 
 leaderboard_image = None
 
-rects = None #a rectangle for each face, from the detector
-
 # Main loop to process video frames
 start_time = time.time()
 
-while True:
-    frame_rate = 1/frame_time_running_average
+exit_key_pressed = False
 
+def handle_keypress(event):
+    global exit_key_pressed
+    if event.key in ('q', 'Q'):
+        print('keypress was q or Q')
+        exit_key_pressed = True
+
+plt.gcf().canvas.mpl_connect('key_press_event', handle_keypress)
+
+while True:
+
+    frame_rate = 1/frame_time_running_average
     frame_begin = time.time()
+    
+    plt.clf()
 
     ret, full_frame = vs.read()  # Capture a frame
 
     if not ret:
+        print('no image; exiting')
         break  # Exit if the frame could not be captured
 
-    frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
+    frame = resize(full_frame, width=600)  # Resize frame for faster processing
+
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
-    gray = cv2.equalizeHist(gray)
 
-    # Detect faces in the grayscale frame
-    rects = detector(gray, 0)
+    results = face_mesh.process(frame)
 
-    if leaderboard_image is None and len(rects)!=0:
-        leaderboard_image = cv2.imencode('.jpg', full_frame)[1].tobytes()
+    if results.multi_face_landmarks:
+        if leaderboard_image is None:
+            leaderboard_image = cv2.imencode('.jpg', full_frame)[1].tobytes()
 
-    # Loop over each detected face
-    for rect in rects:
-        shape = predictor(gray, rect)  # Detect facial landmarks
-        shape = face_utils.shape_to_np(shape)  # Convert landmarks to NumPy array
+        h,w = frame.shape[:2]
 
         # Extract coordinates for left and right eyes
-        left_eye = shape[36:42]
-        right_eye = shape[42:48]
+        landmarks = results.multi_face_landmarks[0].landmark
+        left_eye =  [denormalize_coordinates( landmarks[i].x,landmarks[i].y, w, h ) for i in LEFT_EYE_LANDMARKS]
+        right_eye = [denormalize_coordinates( landmarks[i].x,landmarks[i].y, w, h ) for i in RIGHT_EYE_LANDMARKS]
+
+        cv2.line(frame, tuple(map(int, left_eye[1])), tuple(map(int, left_eye[5])), (255, 0, 0), 2)  # A
+        cv2.line(frame, tuple(map(int, left_eye[2])), tuple(map(int, left_eye[4])), (0, 255, 0), 2)  # B
+        cv2.line(frame, tuple(map(int, left_eye[0])), tuple(map(int, left_eye[3])), (0, 0, 255), 2)  # C
 
         # Calculate EAR for both eyes and average them
         left_ear = eye_aspect_ratio(left_eye)
         right_ear = eye_aspect_ratio(right_eye)
         ear = (left_ear + right_ear) / 2.0
 
-        # Draw landmarks on eyes for visual reference
+        # Draw landmarks on eyes for visual referenceq
         for (x, y) in left_eye:
             cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)  # Draw circles on left eye
         for (x, y) in right_eye:
@@ -167,16 +191,18 @@ while True:
     show_frame_matplotlib(frame)
 
     if blink_detected:
+        print('You Blinked')
         add_to_db(time.time()-start_time, leaderboard_image)
     
-    if blink_detected or plt.waitforbuttonpress(timeout=0.01):
+    if blink_detected or exit_key_pressed:
         plt.close()
         display_leaderboard()
         break;
 
-    if rects: #don't count frames when no face is detected, because they're a lot faster and will shift the timing
+    if results.multi_face_landmarks: #don't count frames when no face is detected, because they're a lot faster and will shift the timing
         frame_time = time.time() - frame_begin
         frame_time_running_average = 0.7*frame_time_running_average + 0.3*frame_time
+    
         
 
 # Release resources
