@@ -25,7 +25,7 @@ LEFT_EYE_LANDMARKS = [362, 385, 387, 263, 373, 380]  # Left eye landmarks
 RIGHT_EYE_LANDMARKS = [33,  160, 158, 133, 153, 144]  # Right eye landmarks
 
 # Define constants for blink detection parameters
-EYE_AR_THRESH = 0.18  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
+EYE_AR_THRESH = 0  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
 EYE_AR_CONSEC_FRAMES = 0.1  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
 
 # Initialize dlib's face detector and facial landmark predictor model
@@ -159,20 +159,24 @@ while True:
         left_eye =  [denormalize_coordinates( landmarks[i].x,landmarks[i].y, w, h ) for i in LEFT_EYE_LANDMARKS]
         right_eye = [denormalize_coordinates( landmarks[i].x,landmarks[i].y, w, h ) for i in RIGHT_EYE_LANDMARKS]
 
-        cv2.line(frame, tuple(map(int, left_eye[1])), tuple(map(int, left_eye[5])), (255, 0, 0), 2)  # A
-        cv2.line(frame, tuple(map(int, left_eye[2])), tuple(map(int, left_eye[4])), (0, 255, 0), 2)  # B
-        cv2.line(frame, tuple(map(int, left_eye[0])), tuple(map(int, left_eye[3])), (0, 0, 255), 2)  # C
 
+        try: #coordinates will occasionally be None when a face is visible then disapears. This isn't often enough to worry about and seems to last for 1 frame, so can safely be ignored
         # Calculate EAR for both eyes and average them
-        left_ear = eye_aspect_ratio(left_eye)
-        right_ear = eye_aspect_ratio(right_eye)
-        ear = (left_ear + right_ear) / 2.0
+            cv2.line(frame, tuple(map(int, left_eye[1])), tuple(map(int, left_eye[5])), (255, 0, 0), 2)  # A
+            cv2.line(frame, tuple(map(int, left_eye[2])), tuple(map(int, left_eye[4])), (0, 255, 0), 2)  # B
+            cv2.line(frame, tuple(map(int, left_eye[0])), tuple(map(int, left_eye[3])), (0, 0, 255), 2)  # C
 
-        # Draw landmarks on eyes for visual referenceq
-        for (x, y) in left_eye:
-            cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)  # Draw circles on left eye
-        for (x, y) in right_eye:
-            cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)  # Draw circles on right eye
+            left_ear = eye_aspect_ratio(left_eye)
+            right_ear = eye_aspect_ratio(right_eye)
+            
+            # Draw landmarks on eyes for visual referenceq
+            for (x, y) in left_eye:
+                cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)  # Draw circles on left eye
+            for (x, y) in right_eye:
+                cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)  # Draw circles on right eye
+        except TypeError: 
+            pass
+        ear = (left_ear + right_ear) / 2.0
 
         # Check if EAR is below blink threshold
         if ear < EYE_AR_THRESH:
