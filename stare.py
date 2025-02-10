@@ -1,6 +1,4 @@
 import cv2
-import dlib
-import imutils
 import mediapipe as mp
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates as denormalize_coordinates
 import numpy as np
@@ -22,15 +20,13 @@ def show_frame_matplotlib(frame):
 # Store the landmark indices for specific facial features
 # These are predefined Mediapipe indices for left and right eyes, iris, nose, and mouth
 
-LEFT_EYE_LANDMARKS = [463, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374,
-                            380, 381, 382, 362]  # Left eye landmarks
+LEFT_EYE_LANDMARKS = [362, 385, 387, 263, 373, 380]  # Left eye landmarks
 
-RIGHT_EYE_LANDMARKS = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145,
-                            144, 163, 7]  # Right eye landmarks
+RIGHT_EYE_LANDMARKS = [33,  160, 158, 133, 153, 144]  # Right eye landmarks
 
 # Define constants for blink detection parameters
-EYE_AR_THRESH = 0.2  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
-EYE_AR_CONSEC_FRAMES = 0.3  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
+EYE_AR_THRESH = 0.18  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
+EYE_AR_CONSEC_FRAMES = 0.1  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
 
 # Initialize dlib's face detector and facial landmark predictor model
 print("[INFO] Loading mediaPipe faceMesh predictor...")
@@ -120,8 +116,6 @@ last_time=time.time()
 
 leaderboard_image = None
 
-rects = None #a rectangle for each face, from the detector
-
 # Main loop to process video frames
 start_time = time.time()
 
@@ -146,9 +140,11 @@ while True:
     ret, full_frame = vs.read()  # Capture a frame
 
     if not ret:
+        print('no image; exiting')
         break  # Exit if the frame could not be captured
 
-    frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
+    frame=full_frame
+    #frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
 
@@ -162,15 +158,19 @@ while True:
 
         # Extract coordinates for left and right eyes
         landmarks = results.multi_face_landmarks[0].landmark
-        left_eye =  [denormalize_coordinates( landmarks[i].x,landmarks[i].y, h, w ) for i in LEFT_EYE_LANDMARKS]
-        right_eye = [denormalize_coordinates( landmarks[i].x,landmarks[i].y, h, w ) for i in RIGHT_EYE_LANDMARKS]
+        left_eye =  [denormalize_coordinates( landmarks[i].x,landmarks[i].y, w, h ) for i in LEFT_EYE_LANDMARKS]
+        right_eye = [denormalize_coordinates( landmarks[i].x,landmarks[i].y, w, h ) for i in RIGHT_EYE_LANDMARKS]
+
+        cv2.line(frame, tuple(map(int, left_eye[1])), tuple(map(int, left_eye[5])), (255, 0, 0), 2)  # A
+        cv2.line(frame, tuple(map(int, left_eye[2])), tuple(map(int, left_eye[4])), (0, 255, 0), 2)  # B
+        cv2.line(frame, tuple(map(int, left_eye[0])), tuple(map(int, left_eye[3])), (0, 0, 255), 2)  # C
 
         # Calculate EAR for both eyes and average them
         left_ear = eye_aspect_ratio(left_eye)
         right_ear = eye_aspect_ratio(right_eye)
         ear = (left_ear + right_ear) / 2.0
 
-        # Draw landmarks on eyes for visual reference
+        # Draw landmarks on eyes for visual referenceq
         for (x, y) in left_eye:
             cv2.circle(frame, (x, y), 1, (0, 255, 0), -1)  # Draw circles on left eye
         for (x, y) in right_eye:
@@ -193,6 +193,7 @@ while True:
     show_frame_matplotlib(frame)
 
     if blink_detected:
+        print('You Blinked')
         add_to_db(time.time()-start_time, leaderboard_image)
     
     if blink_detected or exit_key_pressed:
@@ -200,9 +201,10 @@ while True:
         display_leaderboard()
         break;
 
-    if rects: #don't count frames when no face is detected, because they're a lot faster and will shift the timing
+    if results.multi_face_landmarks: #don't count frames when no face is detected, because they're a lot faster and will shift the timing
         frame_time = time.time() - frame_begin
         frame_time_running_average = 0.7*frame_time_running_average + 0.3*frame_time
+    
         
 
 # Release resources
