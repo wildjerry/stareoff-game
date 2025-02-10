@@ -1,6 +1,8 @@
 import cv2
 import dlib
 import imutils
+import mediapipe as mp
+from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates as denormalize_coordinates
 import numpy as np
 import matplotlib.pyplot as plt
 from imutils import face_utils
@@ -17,22 +19,35 @@ def show_frame_matplotlib(frame):
     plt.show(block=False)  # Show the frame without blocking the main program
     plt.pause(0.001)  # Short pause to allow the figure to refresh
 
+# Store the landmark indices for specific facial features
+# These are predefined Mediapipe indices for left and right eyes, iris, nose, and mouth
+
+LEFT_EYE_LANDMARKS = [463, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374,
+                            380, 381, 382, 362]  # Left eye landmarks
+
+RIGHT_EYE_LANDMARKS = [33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145,
+                            144, 163, 7]  # Right eye landmarks
+
 # Define constants for blink detection parameters
 EYE_AR_THRESH = 0.2  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
 EYE_AR_CONSEC_FRAMES = 0.3  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
 
 # Initialize dlib's face detector and facial landmark predictor model
-print("[INFO] Loading facial landmark predictor...")
-detector = dlib.get_frontal_face_detector()  # Face detection model
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")  # 68-point facial landmarks model
+print("[INFO] Loading mediaPipe faceMesh predictor...")
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
+
+
+def distance(c1, c2):
+    return ( np.linalg.norm( (c1[0]-c2[0], c1[1]-c2[1]) ) )
 
 # Function to calculate Eye Aspect Ratio (EAR) for blink detection
 def eye_aspect_ratio(eye):
     # Compute the distances between the vertical eye landmarks
-    A = np.linalg.norm(eye[1] - eye[5])
-    B = np.linalg.norm(eye[2] - eye[4])
+    A = distance(eye[1], eye[5])
+    B = distance(eye[2], eye[4])
     # Compute the distance between the horizontal eye landmarks
-    C = np.linalg.norm(eye[0] - eye[3])
+    C = distance(eye[0], eye[3])
     # Calculate the EAR, a measure of openness of the eye
     ear = (A + B) / (2.0 * C)
     return ear
@@ -137,20 +152,18 @@ while True:
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
 
-    # Detect faces in the grayscale frame
-    rects = detector(gray, 0)
+    results = face_mesh.process(frame)
 
-    if leaderboard_image is None and len(rects)!=0:
-        leaderboard_image = cv2.imencode('.jpg', full_frame)[1].tobytes()
+    if results.multi_face_landmarks:
+        if leaderboard_image is None:
+            leaderboard_image = cv2.imencode('.jpg', full_frame)[1].tobytes()
 
-    # Loop over each detected face
-    for rect in rects:
-        shape = predictor(gray, rect)  # Detect facial landmarks
-        shape = face_utils.shape_to_np(shape)  # Convert landmarks to NumPy array
+        h,w = frame.shape[:2]
 
         # Extract coordinates for left and right eyes
-        left_eye = shape[36:42]
-        right_eye = shape[42:48]
+        landmarks = results.multi_face_landmarks[0].landmark
+        left_eye =  [denormalize_coordinates( landmarks[i].x,landmarks[i].y, h, w ) for i in LEFT_EYE_LANDMARKS]
+        right_eye = [denormalize_coordinates( landmarks[i].x,landmarks[i].y, h, w ) for i in RIGHT_EYE_LANDMARKS]
 
         # Calculate EAR for both eyes and average them
         left_ear = eye_aspect_ratio(left_eye)

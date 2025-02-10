@@ -1,5 +1,6 @@
 opencv-python
-dlib
+mediapipe
+#dlib
 imutils
 numpy
 matplotlib
