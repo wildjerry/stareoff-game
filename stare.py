@@ -3,7 +3,7 @@ import mediapipe as mp
 from mediapipe.python.solutions.drawing_utils import _normalized_to_pixel_coordinates as denormalize_coordinates
 import numpy as np
 import matplotlib.pyplot as plt
-from imutils import face_utils
+from imutils import resize
 import time
 import sqlite3
 from uuid import uuid4
@@ -130,12 +130,11 @@ def handle_keypress(event):
 plt.gcf().canvas.mpl_connect('key_press_event', handle_keypress)
 
 while True:
-    plt.clf()
-    plt.cla()
 
     frame_rate = 1/frame_time_running_average
-
     frame_begin = time.time()
+    
+    plt.clf()
 
     ret, full_frame = vs.read()  # Capture a frame
 
@@ -143,8 +142,7 @@ while True:
         print('no image; exiting')
         break  # Exit if the frame could not be captured
 
-    frame=full_frame
-    #frame = imutils.resize(full_frame, width=600)  # Resize frame for faster processing
+    frame = resize(full_frame, width=600)  # Resize frame for faster processing
 
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale for face detection
 
