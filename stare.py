@@ -3,14 +3,10 @@ import dlib
 import imutils
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
 from imutils import face_utils
 import time
 import sqlite3
 from uuid import uuid4
-
-
-#frame_artist = None #https://stackoverflow.com/questions/28692246/matplotlib-draw-is-slow-in-loop-when-it-showing-an-image
 
 # Function to display the image using matplotlib
 def show_frame_matplotlib(frame):
@@ -92,6 +88,7 @@ def display_leaderboard():
         r, c = divmod(i, 2)
         ax[r,c].imshow(lb_img)
         ax[r, c].set_title(f"#{lb_rank}: {lb_score:.2f} seconds", fontsize=10)
+        
     plt.show()
 
 
@@ -112,6 +109,17 @@ rects = None #a rectangle for each face, from the detector
 
 # Main loop to process video frames
 start_time = time.time()
+
+exit_key_pressed = False
+
+def handle_keypress(event):
+    global exit_key_pressed
+    print('keypress detected')
+    if event.key in ('q', 'Q'):
+        print('keypress was q or Q')
+        exit_key_pressed = True
+
+plt.gcf().canvas.mpl_connect('key_press_event', handle_keypress)
 
 while True:
     plt.clf()
@@ -176,7 +184,7 @@ while True:
     if blink_detected:
         add_to_db(time.time()-start_time, leaderboard_image)
     
-    if blink_detected or plt.waitforbuttonpress(timeout=0.01):
+    if blink_detected or exit_key_pressed:
         plt.close()
         display_leaderboard()
         break;
