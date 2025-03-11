@@ -25,7 +25,7 @@ LEFT_EYE_LANDMARKS = [362, 385, 387, 263, 373, 380]  # Left eye landmarks
 RIGHT_EYE_LANDMARKS = [33,  160, 158, 133, 153, 144]  # Right eye landmarks
 
 # Define constants for blink detection parameters
-EYE_AR_THRESH = 0  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
+EYE_AR_THRESH = 0.22  # Threshold for the Eye Aspect Ratio (EAR) below which a blink is detected
 EYE_AR_CONSEC_FRAMES = 0.1  # Minimum consecutive duration (seconds) of frames with EAR below threshold to detect blink
 
 # Initialize dlib's face detector and facial landmark predictor model
